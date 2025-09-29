@@ -1,0 +1,115 @@
+import flixel.input.actions.FlxActionDigital;
+import funkin.input.PreciseInputManager;
+import funkin.modding.events.ScriptEvent;
+import funkin.modding.module.ScriptedModule;
+import funkin.save.Save;
+import funkin.util.InputUtil;
+import haxe.ds.ObjectMap;
+
+class ControlsManager extends ScriptedModule {
+    static var _instance:ControlsManager;
+    public static var instance(get, set):ControlsManager;
+    static function set_instance(value:ControlsManager):ControlsManager { return _instance = value; }
+    static function get_instance():ControlsManager { return _instance; }
+
+    var customControls:Null<ControlsSaveData> = Save.instance.modOptions.get("testing");
+
+    var customKeyMap:ObjectMap<Int, Int> = new ObjectMap();
+
+    var inputPressQueue:Array<PreciseInputEvent> = [];
+    var inputReleaseQueue:Array<PreciseInputEvent> = [];
+
+    var justPressedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
+    var justReleasedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
+
+    function new() {
+        super("ControlsManager");
+        ControlsManager.instance = this;
+        initCustomInputs();
+    }
+
+    var extraBindCallbacks:Array<() -> Void> = [];
+    public function registerExtraBind(callback:() -> Void):Void {
+        extraBindCallbacks.push(callback);
+    }
+
+    public function refreshKeyBinds() {
+        trace("Refreshing key binds...");
+        customControls = Save.instance.modOptions.get("testing");
+        initCustomInputs();
+        trace("Key binds refreshed!");
+    }
+
+    function initCustomInputs() {
+        cleanup();
+
+        customKeyMap.clear();
+        inputPressQueue = [];
+        inputReleaseQueue = [];
+        justPressedActions.clear();
+        justReleasedActions.clear();
+
+        var keySets:Array<Array<Int>> = customControls.controls;
+
+        for (keyIndex in 0...keySets.length) {
+            var keyList = keySets[keyIndex];
+            for (keyCode in keyList) {
+                customKeyMap.set(keyCode, keyIndex);
+            }
+
+            var keyName = "testing_" + InputUtil.getKeyName(keyList[keyIndex]);
+            var pressAction = new FlxActionDigital(keyName + "-press");
+            var releaseAction = new FlxActionDigital(keyName + "-release");
+
+            justPressedActions.set(keyIndex, pressAction);
+            justReleasedActions.set(keyIndex, releaseAction);
+
+            for (bind in keyList) {
+                trace("Adding key bind: " + bind);
+                pressAction.addKey(bind, InputsUtil.JUST_PRESSED);
+                releaseAction.addKey(bind, InputsUtil.JUST_RELEASED);
+            }
+        }
+        for (callback in extraBindCallbacks) callback();
+
+        for (pressAction in justPressedActions) trace("Total press actions: " + pressAction.name);
+        for (releaseAction in justReleasedActions) trace("Total release actions: " + releaseAction.name);
+    }
+
+    override public function onUpdate(event:UpdateScriptEvent) {
+        for (key in justPressedActions.keys()) {
+            var pressAction = justPressedActions.get(key);
+            var releaseAction = justReleasedActions.get(key);
+
+            if (pressAction != null && pressAction.check()) onKeyPress(key);
+            if (releaseAction != null && releaseAction.check()) onKeyRelease(key);
+        }
+    }
+
+    function onKeyPress(key:Int) {
+        trace("Custom Key Pressed - Key: " + key);
+        inputReleaseQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
+    }
+
+    function onKeyRelease(key:Int) {
+        trace("Custom Key Released - Key: " + key);
+        inputReleaseQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
+    }
+
+    override public function onDestroy(event:ScriptEvent) {
+        cleanup();
+    }
+
+    function cleanup() {
+        // Clean up existing actions
+        if (justPressedActions != null) {
+            for (action in justPressedActions) if (action != null) action.destroy();
+            justPressedActions.clear();
+        }
+
+        if (justReleasedActions != null) {
+            for (action in justReleasedActions) if (action != null) action.destroy();
+            justReleasedActions.clear();
+        }
+    }
+}

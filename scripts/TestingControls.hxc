@@ -1,0 +1,14 @@
+import funkin.modding.events.ScriptEvent;
+import funkin.modding.module.ScriptedModule;
+
+class TestingControls extends ScriptedModule {
+    var addedKeyBinds:Bool = false;
+
+    override public function onUpdate(event:UpdateScriptEvent) {
+        if (addedKeyBinds) return;
+        ControlsImpl.instance.registerKeybind("Jump", [5, 1], 2);
+        ControlsImpl.instance.registerKeybind("Dodge", [2, 31]);
+        ControlsImpl.instance.registerKeybind("Test", [0, 31], 12);
+        addedKeyBinds = true;
+    }
+}

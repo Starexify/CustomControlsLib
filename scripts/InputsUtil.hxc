@@ -1,0 +1,7 @@
+class InputsUtil {
+    // Input State
+    public static var JUST_RELEASED = -1;
+    public static var RELEASED = 0;
+    public static var PRESSED = 1;
+    public static var JUST_PRESSED = 2;
+}
