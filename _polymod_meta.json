@@ -1,0 +1,13 @@
+{
+  "title": "Custom Controls API",
+  "description": "An API that makes adding keybinds in V-Slice easier.",
+  "contributors": [
+    {
+      "name": "ImVeryBad",
+      "role": "Developer"
+    }
+  ],
+  "api_version": "0.7.5",
+  "mod_version": "0.0.0",
+  "license": "MIT"
+}

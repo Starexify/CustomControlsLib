@@ -27,7 +27,7 @@ class ControlsImpl extends ScriptedModule {
 
     override function onStateChangeEnd(event:StateChangeScriptEvent) {
         if (!(event.targetState is OptionsState)) return;
-        // Add an Extra Controls in Controls
+
         controlsMenu = event.targetState.optionsCodex.pages.get("controls");
         if (controlsMenu == null) return;
         controlsMenu.onExit.add(onControlsExit);
@@ -38,6 +38,7 @@ class ControlsImpl extends ScriptedModule {
         prompt.back.scrollFactor.set(0, 0);
         prompt.exists = false;
 
+        // Clearing and readding
         var headers:FlxTypedGroup<AtlasText> = controlsMenu.members[1].members.copy();
         var keyBinds = controlsMenu.controlGrid.members.copy();
         var labels = controlsMenu.labels.members.copy();
@@ -59,7 +60,7 @@ class ControlsImpl extends ScriptedModule {
         controlsMenu.labels.clear();
 
         trace("[ControlsLib] Adding extra keybinds: " + controlSlots);
-        for (i in 0...controlsLength) insertKeybindInMenu(headersMap, keyBinds, labels, i);
+        for (i in 0...controlsLength) insertEntries(headersMap, keyBinds, labels, i);
 
         controlsMenu.controlGrid.onChange.removeAll();
         controlsMenu.controlGrid.onChange.add(selected -> {
@@ -71,7 +72,8 @@ class ControlsImpl extends ScriptedModule {
         controlsMenu.add(prompt);
     }
 
-    function insertKeybindInMenu(headers:IntMap<AtlasText>, keyBinds:Array<InputItem>, labels:Array<AtlasText>, index:Int) {
+    // Inserting headers and labels with keybindings
+    function insertEntries(headers:IntMap<AtlasText>, keyBinds:Array<InputItem>, labels:Array<AtlasText>, index:Int) {
         var labelY:Float = controlsMenu.deviceList == null ? 30 : 120;
         var spacer = 70;
 
@@ -105,7 +107,7 @@ class ControlsImpl extends ScriptedModule {
             header.y = labelY;
             controlsMenu.members[1].add(header);
             //labelY += spacer;
-            trace(originalControlIndex, headers.get(originalControlIndex));
+            //trace(originalControlIndex, headers.get(originalControlIndex));
         }
 
         if (customSlot != null) {
@@ -154,22 +156,6 @@ class ControlsImpl extends ScriptedModule {
             controlsMenu.itemGroups[column].push(item);
             controlsMenu.controlGrid.addItem(item.name, item);
         }
-    }
-
-    public function registerKeybind(name:String, keys:Array<Int>, ?index:Int):Int {
-        for (i in 0...controlSlots.length) {
-            if (controlSlots[i].name == name) {
-                trace("Cannot register keybind '" + name + "' a control slot with the same name already exists.");
-                return i;
-            }
-        }
-        if (index == null) index = -1;
-        var slot:ControlSlot = {name:name, keys:keys, index:index};
-        controlSlots.push(slot);
-        Save.instance.modOptions.set("customControls", controlSlots);
-        Save.instance.flush();
-        trace("Registered keybind " + name);
-        return controlSlots.length - 1;
     }
 
     function onControlsExit() {
@@ -221,6 +207,22 @@ class ControlsImpl extends ScriptedModule {
         prompt.exists = false;
         controlsMenu.controlGrid.enabled = true;
         controlsMenu.canExit = true;
+    }
+
+    public function registerKeybind(name:String, keys:Array<Int>, ?index:Int):Int {
+        for (i in 0...controlSlots.length) {
+            if (controlSlots[i].name == name) {
+                trace("Cannot register keybind '" + name + "' a control slot with the same name already exists.");
+                return i;
+            }
+        }
+        if (index == null) index = -1;
+        var slot:ControlSlot = {name:name, keys:keys, index:index};
+        controlSlots.push(slot);
+        Save.instance.modOptions.set("customControls", controlSlots);
+        Save.instance.flush();
+        trace("Registered keybind " + name);
+        return controlSlots.length - 1;
     }
 }
 
