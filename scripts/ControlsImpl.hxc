@@ -59,7 +59,7 @@ class ControlsImpl extends ScriptedModule {
         controlsMenu.controlGrid.clear();
         controlsMenu.labels.clear();
 
-        trace("[ControlsLib] Adding extra keybinds: " + controlSlots);
+        trace("[CustomControls] Adding extra keybinds: " + controlSlots);
         for (i in 0...controlsLength) insertEntries(headersMap, keyBinds, labels, i);
 
         controlsMenu.controlGrid.onChange.removeAll();
@@ -209,7 +209,7 @@ class ControlsImpl extends ScriptedModule {
         controlsMenu.canExit = true;
     }
 
-    public function registerKeybind(name:String, keys:Array<Int>, ?index:Int):Int {
+    public function registerKeybind(name:String, keys:Array<Int>, ?index:Int, ?inputTypes:Array<String>):Int {
         for (i in 0...controlSlots.length) {
             if (controlSlots[i].name == name) {
                 trace("Cannot register keybind '" + name + "' a control slot with the same name already exists.");
@@ -217,8 +217,14 @@ class ControlsImpl extends ScriptedModule {
             }
         }
         if (index == null) index = -1;
-        var slot:ControlSlot = {name:name, keys:keys, index:index};
+
+        inputTypes = inputTypes ?? ["justPressed", "justReleased"];
+        var inputs:Array<Int> = [];
+        for (input in inputTypes) inputs.push(InputsUtil.inputFromStr(input));
+
+        var slot:ControlSlot = {name:name, keys:keys, index:index, inputTypes:inputs};
         controlSlots.push(slot);
+
         Save.instance.modOptions.set("customControls", controlSlots);
         Save.instance.flush();
         trace("Registered keybind " + name);
@@ -226,4 +232,4 @@ class ControlsImpl extends ScriptedModule {
     }
 }
 
-typedef ControlSlot = {name:String, keys:Array<Int>, index:Int}
+typedef ControlSlot = {name:String, keys:Array<Int>, index:Int, inputTypes:Array<Int>}

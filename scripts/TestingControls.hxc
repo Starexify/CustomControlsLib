@@ -1,14 +1,24 @@
 import funkin.modding.events.ScriptEvent;
 import funkin.modding.module.ScriptedModule;
+import funkin.save.Save;
 
 class TestingControls extends ScriptedModule {
     var addedKeyBinds:Bool = false;
 
     override public function onUpdate(event:UpdateScriptEvent) {
         if (addedKeyBinds) return;
-        ControlsImpl.instance.registerKeybind("Jump", [5, 1], 2);
-        ControlsImpl.instance.registerKeybind("Dodge", [2, 31]);
-        ControlsImpl.instance.registerKeybind("Test", [0, 31], 12);
+        //Save.instance.modOptions.set("customControls", []);
+        //Save.instance.flush();
+        ControlsImpl.instance.registerKeybind("Test", [73, 0], 12, ["justPressed", "justReleased"]);
+        ControlsImpl.instance.registerKeybind("Test2", [72, 0], 11, ["justPressed", "justReleased"]);
+        ControlsManager.instance.registerCallback("Test", InputsUtil.JUST_PRESSED, key -> {
+            trace("Test was pressed with key: " + key);
+            doSmth(" YEY");
+        });
         addedKeyBinds = true;
+    }
+
+    function doSmth(test:String) {
+        trace("Do Smth called" + test);
     }
 }

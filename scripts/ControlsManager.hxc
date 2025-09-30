@@ -3,23 +3,23 @@ import funkin.input.PreciseInputManager;
 import funkin.modding.events.ScriptEvent;
 import funkin.modding.module.ScriptedModule;
 import funkin.save.Save;
-import funkin.util.InputUtil;
 import haxe.ds.ObjectMap;
+import haxe.ds.StringMap;
+import Lambda;
 
 class ControlsManager extends ScriptedModule {
-    static var _instance:ControlsManager;
-    public static var instance(get, set):ControlsManager;
-    static function set_instance(value:ControlsManager):ControlsManager { return _instance = value; }
-    static function get_instance():ControlsManager { return _instance; }
+    public static var instance:ControlsManager;
 
-    var customControls:Null<ControlsSaveData> = Save.instance.modOptions.get("testing");
+    var controlSlots:Null<Array<ControlSlot>> = Save.instance.modOptions.get("customControls");
 
     var customKeyMap:ObjectMap<Int, Int> = new ObjectMap();
 
     var inputPressQueue:Array<PreciseInputEvent> = [];
     var inputReleaseQueue:Array<PreciseInputEvent> = [];
 
+    var pressedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
     var justPressedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
+    var releasedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
     var justReleasedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
 
     function new() {
@@ -28,16 +28,18 @@ class ControlsManager extends ScriptedModule {
         initCustomInputs();
     }
 
-    var extraBindCallbacks:Array<() -> Void> = [];
-    public function registerExtraBind(callback:() -> Void):Void {
-        extraBindCallbacks.push(callback);
+    var callbacks:StringMap<Array<InputCallback>> = new StringMap();
+
+    public function registerCallback(controlName:String, inputType:Int, callback:Int -> Void) {
+        if (!callbacks.exists(controlName)) callbacks.set(controlName, []);
+        callbacks.get(controlName).push({type: inputType, callback: callback});
+        trace("Registered callback for " + controlName + " on input type " + inputType);
     }
 
-    public function refreshKeyBinds() {
-        trace("Refreshing key binds...");
-        customControls = Save.instance.modOptions.get("testing");
-        initCustomInputs();
-        trace("Key binds refreshed!");
+    function executeCallbacks(controlName:String, inputType:Int, key:Int) {
+        if (!callbacks.exists(controlName)) return;
+
+        for (cb in callbacks.get(controlName)) if (cb.type == inputType) cb.callback(key);
     }
 
     function initCustomInputs() {
@@ -47,33 +49,29 @@ class ControlsManager extends ScriptedModule {
         inputPressQueue = [];
         inputReleaseQueue = [];
         justPressedActions.clear();
+        pressedActions.clear();
         justReleasedActions.clear();
+        releasedActions.clear();
 
-        var keySets:Array<Array<Int>> = customControls.controls;
+        if (controlSlots == null || controlSlots.length <= 0) return;
 
-        for (keyIndex in 0...keySets.length) {
-            var keyList = keySets[keyIndex];
-            for (keyCode in keyList) {
-                customKeyMap.set(keyCode, keyIndex);
-            }
+        for (slot in controlSlots) {
+            var keyName = slot.name;
+            var types = slot.inputTypes != null ? slot.inputTypes : [InputsUtil.JUST_RELEASED, InputsUtil.JUST_PRESSED];
 
-            var keyName = "testing_" + InputUtil.getKeyName(keyList[keyIndex]);
-            var pressAction = new FlxActionDigital(keyName + "-press");
-            var releaseAction = new FlxActionDigital(keyName + "-release");
+            trace("[CustomControls] Setting up " + keyName + " with types: " + types);
 
-            justPressedActions.set(keyIndex, pressAction);
-            justReleasedActions.set(keyIndex, releaseAction);
-
-            for (bind in keyList) {
-                trace("Adding key bind: " + bind);
-                pressAction.addKey(bind, InputsUtil.JUST_PRESSED);
-                releaseAction.addKey(bind, InputsUtil.JUST_RELEASED);
+            for (type in types) {
+                switch (type) {
+                    case -1: createAction(slot, justReleasedActions, "justReleased", InputsUtil.JUST_RELEASED);
+                    case 0: createAction(slot, releasedActions, "released", InputsUtil.RELEASED);
+                    case 1: createAction(slot, pressedActions, "pressed", InputsUtil.PRESSED);
+                    case 2: createAction(slot, justPressedActions, "justPressed", InputsUtil.JUST_PRESSED);
+                }
             }
         }
-        for (callback in extraBindCallbacks) callback();
 
-        for (pressAction in justPressedActions) trace("Total press actions: " + pressAction.name);
-        for (releaseAction in justReleasedActions) trace("Total release actions: " + releaseAction.name);
+        //trace("Total actions - JP: " + Lambda.count(justPressedActions) + ", P: " + Lambda.count(pressedActions) + ", JR: " + Lambda.count(justReleasedActions) + ", R: " + Lambda.count(releasedActions));
     }
 
     override public function onUpdate(event:UpdateScriptEvent) {
@@ -84,16 +82,71 @@ class ControlsManager extends ScriptedModule {
             if (pressAction != null && pressAction.check()) onKeyPress(key);
             if (releaseAction != null && releaseAction.check()) onKeyRelease(key);
         }
+
+        for (key in pressedActions.keys()) {
+            var pressAction = pressedActions.get(key);
+            var releaseAction = releasedActions.get(key);
+
+            if (pressAction != null && pressAction.check()) onKeyHold(key);
+            if (releaseAction != null && releaseAction.check()) onKeyReleased(key);
+        }
     }
 
     function onKeyPress(key:Int) {
-        trace("Custom Key Pressed - Key: " + key);
-        inputReleaseQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
+        for (slot in controlSlots) {
+            if (Lambda.has(slot.keys, key)) {
+                executeCallbacks(slot.name, InputsUtil.JUST_PRESSED, key);
+                break;
+            }
+        }
+        inputPressQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
     }
 
     function onKeyRelease(key:Int) {
-        trace("Custom Key Released - Key: " + key);
+        for (slot in controlSlots) {
+            if (Lambda.has(slot.keys, key)) {
+                executeCallbacks(slot.name, InputsUtil.JUST_RELEASED, key);
+                break;
+            }
+        }
         inputReleaseQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
+    }
+
+    function onKeyHold(key:Int) {
+        for (slot in controlSlots) {
+            if (Lambda.has(slot.keys, key)) {
+                executeCallbacks(slot.name, InputsUtil.PRESSED, key);
+                break;
+            }
+        }
+        inputPressQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
+    }
+
+    function onKeyReleased(key:Int) {
+        for (slot in controlSlots) {
+            if (Lambda.has(slot.keys, key)) {
+                executeCallbacks(slot.name, InputsUtil.RELEASED, key);
+                break;
+            }
+        }
+        inputReleaseQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
+    }
+
+    function createAction(slot:ControlSlot, actionMap:ObjectMap<Int, FlxActionDigital>, suffix:String, inputType:Int) {
+        var action = new FlxActionDigital(slot.name + "-" + suffix);
+        for (bind in slot.keys) {
+            if (bind != 0) {
+                action.addKey(bind, inputType);
+                actionMap.set(bind, action);
+            }
+        }
+    }
+
+    public function refreshKeyBinds() {
+        trace("Refreshing key binds...");
+        controlSlots = Save.instance.modOptions.get("customControls");
+        initCustomInputs();
+        trace("Key binds refreshed!");
     }
 
     override public function onDestroy(event:ScriptEvent) {
@@ -113,3 +166,6 @@ class ControlsManager extends ScriptedModule {
         }
     }
 }
+
+typedef ControlSlot = {name:String, keys:Array<Int>, index:Int, inputTypes:Array<Int>}
+typedef InputCallback = {type:Int, callback:Int -> Void}
