@@ -3,22 +3,46 @@ import funkin.modding.module.ScriptedModule;
 import funkin.save.Save;
 
 class TestingControls extends ScriptedModule {
-    var addedKeyBinds:Bool = false;
+  var addedKeyBinds:Bool = false;
 
-    override public function onUpdate(event:UpdateScriptEvent) {
-        if (addedKeyBinds) return;
-        //Save.instance.modOptions.set("customControls", []);
-        //Save.instance.flush();
-        ControlsImpl.instance.registerKeybind("Test", [73, 0], 12, ["justPressed", "justReleased"]);
-        ControlsImpl.instance.registerKeybind("Test2", [72, 0], 11, ["justPressed", "justReleased"]);
-        ControlsManager.instance.registerCallback("Test", InputsUtil.JUST_PRESSED, key -> {
-            trace("Test was pressed with key: " + key);
-            doSmth(" YEY");
-        });
-        addedKeyBinds = true;
-    }
+  var scrollSpeed = 0;
+  public static var INPUT_DELAY = 300;
 
-    function doSmth(test:String) {
-        trace("Do Smth called" + test);
-    }
+  override public function onStateChangeEnd(event:StateChangeScriptEvent) {
+    ControlsImpl.instance.registerKeybind("Dodge", [32, 0], "NOTES", ["justPressed", "justReleased"], 4);
+
+    ControlsImpl.instance.registerHeader("Scroll Speed", 2);
+
+    ControlsImpl.instance.registerKeybind("Decrease Scroll", [52, 0], "Scroll Speed", ["justPressed", "pressed", "justReleased"], 1);
+    ControlsImpl.instance.registerKeybind("Increase Scroll", [53, 0], "Scroll Speed", ["justPressed", "pressed", "justReleased"], 0);
+  }
+
+  override public function onCreate(event:ScriptEvent) {
+    ControlsImpl.instance.registerHeader("Scroll Speed", 2);
+    ControlsImpl.instance.registerKeybind("Increase Scroll", [53, 0], "Scroll Speed", ["justPressed", "pressed", "justReleased"], 0);
+    ControlsImpl.instance.registerKeybind("Decrease Scroll", [52, 0], "Scroll Speed", ["justPressed", "pressed", "justReleased"], 1);
+  }
+
+  override public function onUpdate(event:UpdateScriptEvent) {
+    if (addedKeyBinds) return;
+    ControlsManager.instance.registerCallback("Decrease Scroll", InputsUtil.PRESSED, key -> {
+      if (INPUT_DELAY != 0) {
+        INPUT_DELAY--;
+        return;
+      }
+
+      scrollSpeed--;
+      trace("Decreasing Scroll: ", scrollSpeed);
+    });
+    ControlsManager.instance.registerCallback("Increase Scroll", InputsUtil.PRESSED, key -> {
+      if (INPUT_DELAY != 0) {
+        INPUT_DELAY--;
+        return;
+      }
+
+      scrollSpeed++;
+      trace("Increasing Scroll: ", scrollSpeed);
+    });
+    addedKeyBinds = true;
+  }
 }

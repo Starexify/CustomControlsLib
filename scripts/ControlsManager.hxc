@@ -8,163 +8,163 @@ import haxe.ds.StringMap;
 import Lambda;
 
 class ControlsManager extends ScriptedModule {
-    public static var instance:ControlsManager;
+  public static var instance:ControlsManager;
 
-    var controlSlots:Null<Array<ControlSlot>> = Save.instance.modOptions.get("customControls");
+  var controlSlots:Null<Array<ControlSlot>> = Save.instance.modOptions.get("customControls");
 
-    var customKeyMap:ObjectMap<Int, Int> = new ObjectMap();
+  var customKeyMap:ObjectMap<Int, Int> = new ObjectMap();
 
-    var inputPressQueue:Array<PreciseInputEvent> = [];
-    var inputReleaseQueue:Array<PreciseInputEvent> = [];
+  var inputPressQueue:Array<PreciseInputEvent> = [];
+  var inputReleaseQueue:Array<PreciseInputEvent> = [];
 
-    var pressedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
-    var justPressedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
-    var releasedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
-    var justReleasedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
+  var pressedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
+  var justPressedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
+  var releasedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
+  var justReleasedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
 
-    function new() {
-        super("ControlsManager");
-        ControlsManager.instance = this;
-        initCustomInputs();
-    }
+  function new() {
+    super("ControlsManager");
+    ControlsManager.instance = this;
+    initCustomInputs();
+  }
 
-    var callbacks:StringMap<Array<InputCallback>> = new StringMap();
+  var callbacks:StringMap<Array<InputCallback>> = new StringMap();
 
-    public function registerCallback(controlName:String, inputType:Int, callback:Int -> Void) {
-        if (!callbacks.exists(controlName)) callbacks.set(controlName, []);
-        callbacks.get(controlName).push({type: inputType, callback: callback});
-        trace("Registered callback for " + controlName + " on input type " + inputType);
-    }
+  public function registerCallback(controlName:String, inputType:Int, callback:Int -> Void) {
+    if (!callbacks.exists(controlName)) callbacks.set(controlName, []);
+    callbacks.get(controlName).push({type: inputType, callback: callback});
+    trace("Registered callback for " + controlName + " on input type " + inputType);
+  }
 
-    function executeCallbacks(controlName:String, inputType:Int, key:Int) {
-        if (!callbacks.exists(controlName)) return;
+  function executeCallbacks(controlName:String, inputType:Int, key:Int) {
+    if (!callbacks.exists(controlName)) return;
 
-        for (cb in callbacks.get(controlName)) if (cb.type == inputType) cb.callback(key);
-    }
+    for (cb in callbacks.get(controlName)) if (cb.type == inputType) cb.callback(key);
+  }
 
-    function initCustomInputs() {
-        cleanup();
+  function initCustomInputs() {
+    cleanup();
 
-        customKeyMap.clear();
-        inputPressQueue = [];
-        inputReleaseQueue = [];
-        justPressedActions.clear();
-        pressedActions.clear();
-        justReleasedActions.clear();
-        releasedActions.clear();
+    customKeyMap.clear();
+    inputPressQueue = [];
+    inputReleaseQueue = [];
+    justPressedActions.clear();
+    pressedActions.clear();
+    justReleasedActions.clear();
+    releasedActions.clear();
 
-        if (controlSlots == null || controlSlots.length <= 0) return;
+    if (controlSlots == null || controlSlots.length <= 0) return;
 
-        for (slot in controlSlots) {
-            var keyName = slot.name;
-            var types = slot.inputTypes != null ? slot.inputTypes : [InputsUtil.JUST_RELEASED, InputsUtil.JUST_PRESSED];
+    for (slot in controlSlots) {
+      var keyName = slot.name;
+      var types = slot.inputTypes != null ? slot.inputTypes : [InputsUtil.JUST_RELEASED, InputsUtil.JUST_PRESSED];
 
-            trace("[CustomControls] Setting up " + keyName + " with types: " + types);
+      trace("[CustomControls] Setting up " + keyName + " with types: " + types);
 
-            for (type in types) {
-                switch (type) {
-                    case -1: createAction(slot, justReleasedActions, "justReleased", InputsUtil.JUST_RELEASED);
-                    case 0: createAction(slot, releasedActions, "released", InputsUtil.RELEASED);
-                    case 1: createAction(slot, pressedActions, "pressed", InputsUtil.PRESSED);
-                    case 2: createAction(slot, justPressedActions, "justPressed", InputsUtil.JUST_PRESSED);
-                }
-            }
+      for (type in types) {
+        switch (type) {
+          case -1: createAction(slot, justReleasedActions, "justReleased", InputsUtil.JUST_RELEASED);
+          case 0: createAction(slot, releasedActions, "released", InputsUtil.RELEASED);
+          case 1: createAction(slot, pressedActions, "pressed", InputsUtil.PRESSED);
+          case 2: createAction(slot, justPressedActions, "justPressed", InputsUtil.JUST_PRESSED);
         }
-
-        //trace("Total actions - JP: " + Lambda.count(justPressedActions) + ", P: " + Lambda.count(pressedActions) + ", JR: " + Lambda.count(justReleasedActions) + ", R: " + Lambda.count(releasedActions));
+      }
     }
 
-    override public function onUpdate(event:UpdateScriptEvent) {
-        for (key in justPressedActions.keys()) {
-            var pressAction = justPressedActions.get(key);
-            var releaseAction = justReleasedActions.get(key);
+    //trace("Total actions - JP: " + Lambda.count(justPressedActions) + ", P: " + Lambda.count(pressedActions) + ", JR: " + Lambda.count(justReleasedActions) + ", R: " + Lambda.count(releasedActions));
+  }
 
-            if (pressAction != null && pressAction.check()) onKeyPress(key);
-            if (releaseAction != null && releaseAction.check()) onKeyRelease(key);
-        }
+  override public function onUpdate(event:UpdateScriptEvent) {
+    for (key in justPressedActions.keys()) {
+      var pressAction = justPressedActions.get(key);
+      var releaseAction = justReleasedActions.get(key);
 
-        for (key in pressedActions.keys()) {
-            var pressAction = pressedActions.get(key);
-            var releaseAction = releasedActions.get(key);
-
-            if (pressAction != null && pressAction.check()) onKeyHold(key);
-            if (releaseAction != null && releaseAction.check()) onKeyReleased(key);
-        }
+      if (pressAction != null && pressAction.check()) onKeyPress(key);
+      if (releaseAction != null && releaseAction.check()) onKeyRelease(key);
     }
 
-    function onKeyPress(key:Int) {
-        for (slot in controlSlots) {
-            if (Lambda.has(slot.keys, key)) {
-                executeCallbacks(slot.name, InputsUtil.JUST_PRESSED, key);
-                break;
-            }
-        }
-        inputPressQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
+    for (key in pressedActions.keys()) {
+      var pressAction = pressedActions.get(key);
+      var releaseAction = releasedActions.get(key);
+
+      if (pressAction != null && pressAction.check()) onKeyHold(key);
+      if (releaseAction != null && releaseAction.check()) onKeyReleased(key);
+    }
+  }
+
+  function onKeyPress(key:Int) {
+    for (slot in controlSlots) {
+      if (Lambda.has(slot.keys, key)) {
+        executeCallbacks(slot.name, InputsUtil.JUST_PRESSED, key);
+        break;
+      }
+    }
+    inputPressQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
+  }
+
+  function onKeyRelease(key:Int) {
+    for (slot in controlSlots) {
+      if (Lambda.has(slot.keys, key)) {
+        executeCallbacks(slot.name, InputsUtil.JUST_RELEASED, key);
+        break;
+      }
+    }
+    inputReleaseQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
+  }
+
+  function onKeyHold(key:Int) {
+    for (slot in controlSlots) {
+      if (Lambda.has(slot.keys, key)) {
+        executeCallbacks(slot.name, InputsUtil.PRESSED, key);
+        break;
+      }
+    }
+    inputPressQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
+  }
+
+  function onKeyReleased(key:Int) {
+    for (slot in controlSlots) {
+      if (Lambda.has(slot.keys, key)) {
+        executeCallbacks(slot.name, InputsUtil.RELEASED, key);
+        break;
+      }
+    }
+    inputReleaseQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
+  }
+
+  function createAction(slot:ControlSlot, actionMap:ObjectMap<Int, FlxActionDigital>, suffix:String, inputType:Int) {
+    var action = new FlxActionDigital(slot.name + "-" + suffix);
+    for (bind in slot.keys) {
+      if (bind != 0) {
+        action.addKey(bind, inputType);
+        actionMap.set(bind, action);
+      }
+    }
+  }
+
+  public function refreshKeyBinds() {
+    trace("Refreshing key binds...");
+    controlSlots = Save.instance.modOptions.get("customControls");
+    initCustomInputs();
+    trace("Key binds refreshed!");
+  }
+
+  override public function onDestroy(event:ScriptEvent) {
+    cleanup();
+  }
+
+  function cleanup() {
+    // Clean up existing actions
+    if (justPressedActions != null) {
+      for (action in justPressedActions) if (action != null) action.destroy();
+      justPressedActions.clear();
     }
 
-    function onKeyRelease(key:Int) {
-        for (slot in controlSlots) {
-            if (Lambda.has(slot.keys, key)) {
-                executeCallbacks(slot.name, InputsUtil.JUST_RELEASED, key);
-                break;
-            }
-        }
-        inputReleaseQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
+    if (justReleasedActions != null) {
+      for (action in justReleasedActions) if (action != null) action.destroy();
+      justReleasedActions.clear();
     }
-
-    function onKeyHold(key:Int) {
-        for (slot in controlSlots) {
-            if (Lambda.has(slot.keys, key)) {
-                executeCallbacks(slot.name, InputsUtil.PRESSED, key);
-                break;
-            }
-        }
-        inputPressQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
-    }
-
-    function onKeyReleased(key:Int) {
-        for (slot in controlSlots) {
-            if (Lambda.has(slot.keys, key)) {
-                executeCallbacks(slot.name, InputsUtil.RELEASED, key);
-                break;
-            }
-        }
-        inputReleaseQueue.push({noteDirection: key, timestamp: PreciseInputManager.getCurrentTimestamp()});
-    }
-
-    function createAction(slot:ControlSlot, actionMap:ObjectMap<Int, FlxActionDigital>, suffix:String, inputType:Int) {
-        var action = new FlxActionDigital(slot.name + "-" + suffix);
-        for (bind in slot.keys) {
-            if (bind != 0) {
-                action.addKey(bind, inputType);
-                actionMap.set(bind, action);
-            }
-        }
-    }
-
-    public function refreshKeyBinds() {
-        trace("Refreshing key binds...");
-        controlSlots = Save.instance.modOptions.get("customControls");
-        initCustomInputs();
-        trace("Key binds refreshed!");
-    }
-
-    override public function onDestroy(event:ScriptEvent) {
-        cleanup();
-    }
-
-    function cleanup() {
-        // Clean up existing actions
-        if (justPressedActions != null) {
-            for (action in justPressedActions) if (action != null) action.destroy();
-            justPressedActions.clear();
-        }
-
-        if (justReleasedActions != null) {
-            for (action in justReleasedActions) if (action != null) action.destroy();
-            justReleasedActions.clear();
-        }
-    }
+  }
 }
 
 typedef ControlSlot = {name:String, keys:Array<Int>, index:Int, inputTypes:Array<Int>}

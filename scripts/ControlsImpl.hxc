@@ -10,226 +10,313 @@ import funkin.ui.options.OptionsState;
 import funkin.ui.Prompt;
 import funkin.ui.TextMenuItem;
 import funkin.util.InputUtil;
-import haxe.ds.IntMap;
+import haxe.ds.StringMap;
 
 class ControlsImpl extends ScriptedModule {
-    public static var instance:ControlsImpl;
+  public static var instance:ControlsImpl;
 
-    var controlSlots:Null<Array<ControlSlot>> = Save.instance.modOptions.get("customControls");
+  var controlSlots:Null<Array<ControlSlot>> = Save.instance.modOptions.get("customControls") ?? [];
+  var headerSlots:Null<Array<HeaderSlot>> = Save.instance.modOptions.get("customHeaders") ?? [];
 
-    var controlsMenu:ControlsMenu;
-    var prompt:Prompt;
+  var controlsMenu:ControlsMenu;
+  var prompt:Prompt;
 
-    function new() {
-        super("ControlsImpl");
-        ControlsImpl.instance = this;
+  function new() {
+    super("ControlsImpl");
+    ControlsImpl.instance = this;
+  }
+
+  // API Methods
+  public function registerHeader(name:String, ?index:Int):Int {
+    for (i in 0...headerSlots.length) {
+      if (headerSlots[i].name == name) {
+        trace("Cannot register header '" + name + "' a header slot with the same name already exists.");
+        return i;
+      }
     }
 
-    override function onStateChangeEnd(event:StateChangeScriptEvent) {
-        if (!(event.targetState is OptionsState)) return;
+    var slot:HeaderSlot = {name:name, index:index};
+    headerSlots.push(slot);
 
-        controlsMenu = event.targetState.optionsCodex.pages.get("controls");
-        if (controlsMenu == null) return;
-        controlsMenu.onExit.add(onControlsExit);
 
-        prompt = new Prompt("\nPress any key to rebind\n\n\nBackspace to unbind\n    Escape to cancel", ButtonStyle.None);
-        prompt.create();
-        prompt.createBgFromMargin(100, -328339);
-        prompt.back.scrollFactor.set(0, 0);
-        prompt.exists = false;
+    Save.instance.modOptions.set("customHeaders", headerSlots);
+    Save.instance.flush();
+    trace("Registered header " + name);
+    return headerSlots.length - 1;
+  }
 
-        // Clearing and readding
-        var headers:FlxTypedGroup<AtlasText> = controlsMenu.members[1].members.copy();
-        var keyBinds = controlsMenu.controlGrid.members.copy();
-        var labels = controlsMenu.labels.members.copy();
+  public function registerKeybind(name:String, keys:Array<Int>, ?header:String, ?inputTypes:Array<String>, ?index:Int):Int {
+    for (i in 0...controlSlots.length) {
+      if (controlSlots[i].name == name) {
+        trace("Cannot register keybind '" + name + "' a control slot with the same name already exists.");
+        return i;
+      }
+    }
+    if (header == null) header = "";
+    if (index == null) index = -1;
 
-        var headersMap:IntMap<AtlasText> = new IntMap();
-        for (header in headers) {
-            for (i in 0...labels.length) {
-                if (labels[i].y > header.y) {
-                    headersMap.set(i, header);
-                    break;
-                }
-            }
-        }
+    inputTypes = inputTypes ?? ["justPressed", "justReleased"];
+    var inputs:Array<Int> = [];
+    for (input in inputTypes) inputs.push(InputsUtil.inputFromStr(input));
 
-        var controlsLength = controlsMenu.labels.members.length + controlSlots.length;
+    var slot:ControlSlot = {name:name, keys:keys, header:header, index:index, inputTypes:inputs};
+    controlSlots.push(slot);
 
-        controlsMenu.members[1].clear();
-        controlsMenu.controlGrid.clear();
-        controlsMenu.labels.clear();
+    Save.instance.modOptions.set("customControls", controlSlots);
+    Save.instance.flush();
+    trace("Registered keybind " + name);
+    return controlSlots.length - 1;
+  }
 
-        trace("[CustomControls] Adding extra keybinds: " + controlSlots);
-        for (i in 0...controlsLength) insertEntries(headersMap, keyBinds, labels, i);
+  public function unregisterHeader(name:String) {
+    headerSlots = headerSlots.filter(slot -> slot.name != name);
 
-        controlsMenu.controlGrid.onChange.removeAll();
-        controlsMenu.controlGrid.onChange.add(selected -> {
-            controlsMenu.camFollow.y = selected.y;
-            controlsMenu.labels.forEach((label) -> label.alpha = 0.6);
-            controlsMenu.labels.members[Std.int(controlsMenu.controlGrid.selectedIndex / 2)].alpha = 1.0;
-        });
+    Save.instance.modOptions.set("customHeaders", headerSlots);
+    Save.instance.flush();
+    trace("Unregistered header " + name);
+    return headerSlots.length - 1;
+  }
 
-        controlsMenu.add(prompt);
+  public function unregisterKeybind(name:String) {
+    controlSlots = controlSlots.filter(slot -> slot.name != name);
+
+    Save.instance.modOptions.set("customControls", controlSlots);
+    Save.instance.flush();
+    trace("Unregistered keybind " + name);
+    return controlSlots.length - 1;
+  }
+
+  // Controls Menu Replacement
+  override function onStateChangeEnd(event:StateChangeScriptEvent) {
+    if (!(event.targetState is OptionsState)) return;
+
+    controlsMenu = event.targetState.optionsCodex.pages.get("controls");
+    if (controlsMenu == null) return;
+    controlsMenu.onExit.add(onControlsExit);
+
+    prompt = new Prompt("\nPress any key to rebind\n\n\nBackspace to unbind\n    Escape to cancel", ButtonStyle.None);
+    prompt.create();
+    prompt.createBgFromMargin(100, -328339);
+    prompt.back.scrollFactor.set(0, 0);
+    prompt.exists = false;
+
+    // Clearing and readding
+    var headers:FlxTypedGroup<AtlasText> = controlsMenu.members[1].members.copy();
+    var keyBinds = controlsMenu.controlGrid.members.copy();
+    var labels = controlsMenu.labels.members.copy();
+
+    controlsMenu.members[1].clear();
+    controlsMenu.controlGrid.clear();
+    controlsMenu.labels.clear();
+
+    trace("[CustomControls] Adding extra headers: " + headerSlots);
+    trace("[CustomControls] Adding extra keybinds: " + controlSlots);
+    buildControls(headers, keyBinds, labels);
+
+    controlsMenu.controlGrid.onChange.removeAll();
+    controlsMenu.controlGrid.onChange.add(selected -> {
+      controlsMenu.camFollow.y = selected.y;
+      controlsMenu.labels.forEach((label) -> label.alpha = 0.6);
+      controlsMenu.labels.members[Std.int(controlsMenu.controlGrid.selectedIndex / 2)].alpha = 1.0;
+    });
+
+    controlsMenu.add(prompt);
+  }
+
+  // Inserting headers and labels with keybindings
+  function buildControls(ogHeaders:FlxTypedGroup<AtlasText>, keyBinds:Array<InputItem>, labels:Array<AtlasText>) {
+    var yPos:Float = controlsMenu.deviceList == null ? 30 : 120;
+    var spacer = 70;
+    var headerSpacer = 90;
+
+    var labelMap = buildLabelMap(labels, ogHeaders);
+    var orderedHeaders = getOrderedHeaders(ogHeaders);
+    var globalControlIndex = 0;
+
+    for (headerSlot in orderedHeaders) {
+      var headerText = new AtlasText(ControlsMenu.CONTROL_BASE_X, yPos, headerSlot.name, "bold").screenCenter(0x01);
+      headerText.alpha = 0.9;
+      controlsMenu.members[1].add(headerText);
+      yPos += headerSpacer;
+
+      var originalControls = labelMap.get(headerSlot.name) ?? [];
+      var customControls = controlSlots.filter(slot -> slot.header == headerSlot.name);
+
+      var mergedControls = mergeControls(originalControls, customControls, globalControlIndex);
+
+      for (entry in mergedControls) {
+        if (entry.isCustom) addCustomControl(entry.slot, entry.slotIndex, yPos);
+        else addOriginalControl(entry.originalLabel, keyBinds, entry.originalIndex, yPos);
+
+        yPos += spacer;
+      }
+
+      globalControlIndex += originalControls.length;
+    }
+  }
+
+  function addCustomControl(slot:ControlSlot, arrayIndex:Int, y:Float) {
+    var label = controlsMenu.labels.add(new AtlasText(ControlsMenu.CONTROL_BASE_X, y, slot.name, "bold"));
+    label.alpha = 0.6;
+    createKeyBinds(slot, arrayIndex, label.x, y);
+  }
+
+  function addOriginalControl(label:AtlasText, keyBinds:Array<InputItem>, originalIndex:Int, y:Float) {
+    label.y = y;
+    controlsMenu.labels.add(label);
+
+    var startBindIndex = originalIndex * 2;
+    for (column in 0...2) {
+      var bindIndex = startBindIndex + column;
+      if (bindIndex < keyBinds.length) {
+        var item = keyBinds[bindIndex];
+        item.y = y;
+        controlsMenu.itemGroups[column].push(item);
+        controlsMenu.controlGrid.addItem(item.name, item);
+      }
+    }
+  }
+
+  function createKeyBinds(slot:ControlSlot, index:Int, labelX:Float, labelY:Float) {
+    var controlsArray = slot.keys.map(InputUtil.getKeyName);
+    for (k in 0...controlsArray.length) if (slot.keys[k] == 0) controlsArray[k] = "---";
+
+    var persIndex = index;
+    for (column in 0...2) {
+      var item:TextMenuItem = new TextMenuItem(labelX + ControlsMenu.CONTROL_MARGIN_X + column * ControlsMenu.CONTROL_SPACING_X, labelY, controlsArray[column], "default",
+      () -> selectBind(controlsMenu, persIndex, column));
+      item.fireInstantly = true;
+      controlsMenu.itemGroups[column].push(item);
+      controlsMenu.controlGrid.addItem(item.name, item);
+    }
+  }
+
+  function mergeControls(originalControls:Array<{label:AtlasText, index:Int}>, customControls:Array<ControlSlot>, baseIndex:Int):Array<ControlEntry> {
+    var result:Array<ControlEntry> = [];
+
+    // Create entries for original controls
+    for (i in 0...originalControls.length) {
+      result.push({
+        pos: i, isCustom: false, originalLabel: originalControls[i].label, originalIndex: originalControls[i].index, slot: null, slotIndex: -1
+      });
     }
 
-    // Inserting headers and labels with keybindings
-    function insertEntries(headers:IntMap<AtlasText>, keyBinds:Array<InputItem>, labels:Array<AtlasText>, index:Int) {
-        var labelY:Float = controlsMenu.deviceList == null ? 30 : 120;
-        var spacer = 70;
+    // Insert custom controls at specified positions
+    for (slot in customControls) {
+      var arrayIndex = controlSlots.indexOf(slot);
+      var insertPos = slot.index;
 
-        var originalControlIndex = 0;
+      // Position at end if -1 or longer (until the position exists)
+      if (insertPos < 0 || insertPos > result.length) insertPos = result.length;
 
-        for (i in 0...index) {
-            var hasCustomAtI = false;
-            for (slot in controlSlots) {
-                if (slot.index == i) {
-                    hasCustomAtI = true;
-                    break;
-                }
-            }
-            if (!hasCustomAtI) originalControlIndex++;
-        }
+      result.insert(insertPos, {
+        pos: insertPos, isCustom: true, originalLabel: null, originalIndex: -1, slot: slot, slotIndex: arrayIndex
+      });
 
-        var customSlot:ControlSlot = null;
-        var customSlotArrayIndex:Int = -1;
-        for (i in 0...controlSlots.length) {
-            if (controlSlots[i].index == index) {
-                customSlot = controlSlots[i];
-                customSlotArrayIndex = i;
-                break;
-            }
-        }
+      for (i in (insertPos + 1)...result.length) result[i].pos++;
+    }
 
-        labelY += spacer * index;
+    return result;
+  }
 
-        if (customSlot == null && headers.exists(originalControlIndex)) {
-            var header = headers.get(originalControlIndex);
-            header.y = labelY;
-            controlsMenu.members[1].add(header);
-            //labelY += spacer;
-            //trace(originalControlIndex, headers.get(originalControlIndex));
-        }
+  function getOrderedHeaders(headers) {
+    var result:Array<HeaderSlot> = [];
+    var headerMap:StringMap<Bool> = new StringMap();
 
-        if (customSlot != null) {
-            var label = controlsMenu.labels.add(new AtlasText(ControlsMenu.CONTROL_BASE_X, labelY, customSlot.name, "bold"));
-            label.alpha = 0.6;
-            createKeyBinds(customSlot, customSlotArrayIndex, label.x, labelY);
-        } else if (originalControlIndex < labels.length) {
-            // Add original entry
-            labels[originalControlIndex].y = labelY;
-            controlsMenu.labels.add(labels[originalControlIndex]);
+    for (i in 0...headers.length) {
+      var header = headers[i];
+      var slot:HeaderSlot = {name: header.text, index: i};
+      result.push(slot);
+      headerMap.set(header.text, true);
+    }
 
-            var startBindIndex = originalControlIndex * 2;
-            for (column in 0...2) {
-                var bindIndex = startBindIndex + column;
-                if (bindIndex < keyBinds.length) {
-                    var item = keyBinds[bindIndex];
-                    item.y = labelY;
-                    controlsMenu.itemGroups[column].push(item);
-                    controlsMenu.controlGrid.addItem(item.name, item);
-                }
-            }
+    for (headerSlot in headerSlots) {
+      if (!headerMap.exists(headerSlot.name)) {
+        if (headerSlot.index >= 0 && headerSlot.index < result.length) {
+          result.insert(headerSlot.index, headerSlot);
         } else {
-            // Add negative entries at last
-            var negativeIndex = controlSlots.filter(slot -> slot.index < 0);
-            var negativeSlotIndex = index - labels.length - controlSlots.filter(slot -> slot.index >= 0).length;
-
-            if (negativeSlotIndex >= 0 && negativeSlotIndex < negativeIndex.length) {
-                var slot = negativeIndex[negativeSlotIndex];
-                var actualArrayIndex = controlSlots.indexOf(slot);
-                var label = controlsMenu.labels.add(new AtlasText(ControlsMenu.CONTROL_BASE_X, labelY, slot.name, "bold"));
-                label.alpha = 0.6;
-                createKeyBinds(slot, actualArrayIndex, label.x, labelY);
-            }
+          result.push(headerSlot);
         }
+        headerMap.set(headerSlot.name, true);
+      }
     }
 
-    function createKeyBinds(slot:ControlSlot, index:Int, labelX:Float, labelY:Float) {
-        var controlsArray = slot.keys.map(InputUtil.getKeyName);
-        for (k in 0...controlsArray.length) if (slot.keys[k] == 0) controlsArray[k] = "---";
+    return result;
+  }
 
-        var persIndex = index;
-        for (column in 0...2) {
-            var item:TextMenuItem = new TextMenuItem(labelX + ControlsMenu.CONTROL_MARGIN_X + column * ControlsMenu.CONTROL_SPACING_X, labelY, controlsArray[column], "default",
-            () -> selectBind(controlsMenu, persIndex, column));
-            item.fireInstantly = true;
-            controlsMenu.itemGroups[column].push(item);
-            controlsMenu.controlGrid.addItem(item.name, item);
-        }
+  function buildLabelMap(labels:Array<AtlasText>, headers:FlxTypedGroup<AtlasText>):StringMap<Array<{label:AtlasText, index:Int}>> {
+    var map:StringMap<Array<{label:AtlasText, index:Int}>> = new StringMap();
+    for (i in 0...labels.length) {
+      var label = labels[i];
+      var headerName = getHeaderForLabel(label, headers);
+      if (!map.exists(headerName)) map.set(headerName, []);
+      map.get(headerName).push({label: label, index: i});
     }
 
-    function onControlsExit() {
-        ControlsManager.instance.refreshKeyBinds();
+    return map;
+  }
+
+  function getHeaderForLabel(label:AtlasText, headers:FlxTypedGroup<AtlasText>):String {
+    var chosenHeader:String = "";
+    for (header in headers) {
+      if (header.y <= label.y) chosenHeader = header.text;
+      else break;
     }
+    return chosenHeader;
+  }
 
-    override function onUpdate(event:UpdateScriptEvent) {
-        if (controlsMenu == null) return;
-        if (prompt.exists) {
-            var key:Int = FlxG.keys.firstJustReleased();
-            if (key != -1 && key != keyUsedToEnterPrompt) {
-                if (key == 27) {
-                    closePrompt();
-                } else if (key == 8) {
-                    onInputSelect(0);
-                    closePrompt();
-                } else {
-                    onInputSelect(key);
-                    closePrompt();
-                }
-            }
-        }
+  function onControlsExit() {
+    ControlsManager.instance.refreshKeyBinds();
+  }
+
+  // Promt handling
+  var selSlot = -1;
+  var selKey = -1;
+  var keyUsedToEnterPrompt:Int;
+
+  override function onUpdate(event:UpdateScriptEvent) {
+    if (controlsMenu == null || !prompt.exists) return;
+
+    var key:Int = FlxG.keys.firstJustReleased();
+    if (key == -1 || key == keyUsedToEnterPrompt) return;
+
+    switch (key) {
+      case 27: // Escape
+        closePrompt();
+      case 8: // Backspace
+        onInputSelect(0);
+        closePrompt();
+      default:
+        onInputSelect(key);
+        closePrompt();
     }
+  }
 
-    var selectedKC = -1;
-    var selectedControl = -1;
-    var keyUsedToEnterPrompt:Int;
+  function selectBind(controlsMenu:ControlsMenu, slot:Int, keyIndex:Int) {
+    selSlot = slot;
+    selKey = keyIndex;
+    keyUsedToEnterPrompt = FlxG.keys.firstJustPressed();
 
-    function selectBind(controlsMenu:ControlsMenu, kc, controlNum) {
-        selectedKC = kc;
-        selectedControl = controlNum;
-        keyUsedToEnterPrompt = FlxG.keys.firstJustPressed();
-        controlsMenu.controlGrid.enabled = false;
-        controlsMenu.canExit = false;
-        prompt.exists = true;
-    }
+    controlsMenu.controlGrid.enabled = false;
+    controlsMenu.canExit = false;
+    prompt.exists = true;
+  }
 
-    function onInputSelect(input:Int) {
-        trace(input);
-        trace(selectedKC);
-        var newControlName = InputUtil.getKeyName(input);
-        if (input == 0) newControlName = "---";
-        controlsMenu.controlGrid.members[controlsMenu.controlGrid.selectedIndex].label.text = newControlName;
+  function onInputSelect(input:Int) {
+    var newControlName = InputUtil.getKeyName(input);
+    if (input == 0) newControlName = "---";
+    controlsMenu.controlGrid.members[controlsMenu.controlGrid.selectedIndex].label.text = newControlName;
 
-        controlSlots[selectedKC].keys[selectedControl] = input;
-    }
+    controlSlots[selSlot].keys[selKey] = input;
+  }
 
-    function closePrompt() {
-        prompt.exists = false;
-        controlsMenu.controlGrid.enabled = true;
-        controlsMenu.canExit = true;
-    }
-
-    public function registerKeybind(name:String, keys:Array<Int>, ?index:Int, ?inputTypes:Array<String>):Int {
-        for (i in 0...controlSlots.length) {
-            if (controlSlots[i].name == name) {
-                trace("Cannot register keybind '" + name + "' a control slot with the same name already exists.");
-                return i;
-            }
-        }
-        if (index == null) index = -1;
-
-        inputTypes = inputTypes ?? ["justPressed", "justReleased"];
-        var inputs:Array<Int> = [];
-        for (input in inputTypes) inputs.push(InputsUtil.inputFromStr(input));
-
-        var slot:ControlSlot = {name:name, keys:keys, index:index, inputTypes:inputs};
-        controlSlots.push(slot);
-
-        Save.instance.modOptions.set("customControls", controlSlots);
-        Save.instance.flush();
-        trace("Registered keybind " + name);
-        return controlSlots.length - 1;
-    }
+  function closePrompt() {
+    prompt.exists = false;
+    controlsMenu.controlGrid.enabled = true;
+    controlsMenu.canExit = true;
+  }
 }
 
-typedef ControlSlot = {name:String, keys:Array<Int>, index:Int, inputTypes:Array<Int>}
+typedef ControlEntry = {pos:Int, isCustom:Bool, originalLabel:Null<AtlasText>, originalIndex:Int, slot:Null<ControlSlot>, slotIndex:Int}
+typedef ControlSlot = {name:String, keys:Array<Int>, header:String, index:Int, inputTypes:Array<Int>}
+typedef HeaderSlot = {name:String, index:Int}
