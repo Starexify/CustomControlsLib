@@ -9,12 +9,9 @@ class TestingControls extends ScriptedModule {
   public static var INPUT_DELAY = 300;
 
   override public function onStateChangeEnd(event:StateChangeScriptEvent) {
-    ControlsImpl.instance.registerKeybind("Dodge", [32, 0], "NOTES", ["justPressed", "justReleased"], 4);
+    //ControlsImpl.instance.unregisterKeybind("Dodge");
 
-    ControlsImpl.instance.registerHeader("Scroll Speed", 2);
-
-    ControlsImpl.instance.registerKeybind("Decrease Scroll", [52, 0], "Scroll Speed", ["justPressed", "pressed", "justReleased"], 1);
-    ControlsImpl.instance.registerKeybind("Increase Scroll", [53, 0], "Scroll Speed", ["justPressed", "pressed", "justReleased"], 0);
+    ControlsImpl.instance.registerKeybind("Dodge", [32, 0], "NOTES", ["justPressed", "justReleased"], 4, "notes");
   }
 
   override public function onCreate(event:ScriptEvent) {

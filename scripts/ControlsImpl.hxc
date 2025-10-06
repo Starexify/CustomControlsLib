@@ -1,5 +1,6 @@
 import flixel.FlxG;
-import flixel.group.FlxGroup.FlxTypedGroup;
+import flixel.group.FlxTypedGroup;
+import funkin.graphics.FunkinSprite;
 import funkin.modding.events.ScriptEvent;
 import funkin.modding.module.ScriptedModule;
 import funkin.save.Save;
@@ -10,6 +11,7 @@ import funkin.ui.options.OptionsState;
 import funkin.ui.Prompt;
 import funkin.ui.TextMenuItem;
 import funkin.util.InputUtil;
+import haxe.ds.IntMap;
 import haxe.ds.StringMap;
 
 class ControlsImpl extends ScriptedModule {
@@ -17,6 +19,11 @@ class ControlsImpl extends ScriptedModule {
 
   var controlSlots:Null<Array<ControlSlot>> = Save.instance.modOptions.get("customControls") ?? [];
   var headerSlots:Null<Array<HeaderSlot>> = Save.instance.modOptions.get("customHeaders") ?? [];
+  var controlSprites:FlxTypedGroup<FunkinSprite>;
+
+  public static var SPRITES:StringMap<Dynamic>;
+
+  var slotToSprIndex:IntMap<Int>;
 
   var controlsMenu:ControlsMenu;
   var prompt:Prompt;
@@ -24,6 +31,14 @@ class ControlsImpl extends ScriptedModule {
   function new() {
     super("ControlsImpl");
     ControlsImpl.instance = this;
+
+    SPRITES = new StringMap();
+    SPRITES.set("NOTES", [
+      "left" => "left",
+      "down" => "down",
+      "up" => "up",
+      "right" => "right"
+    ]);
   }
 
   // API Methods
@@ -45,7 +60,7 @@ class ControlsImpl extends ScriptedModule {
     return headerSlots.length - 1;
   }
 
-  public function registerKeybind(name:String, keys:Array<Int>, ?header:String, ?inputTypes:Array<String>, ?index:Int):Int {
+  public function registerKeybind(name:String, keys:Array<Int>, ?header:String, ?inputTypes:Array<String>, ?index:Int, ?spritePath:String):Int {
     for (i in 0...controlSlots.length) {
       if (controlSlots[i].name == name) {
         trace("Cannot register keybind '" + name + "' a control slot with the same name already exists.");
@@ -55,11 +70,14 @@ class ControlsImpl extends ScriptedModule {
     if (header == null) header = "";
     if (index == null) index = -1;
 
+
     inputTypes = inputTypes ?? ["justPressed", "justReleased"];
     var inputs:Array<Int> = [];
     for (input in inputTypes) inputs.push(InputsUtil.inputFromStr(input));
 
-    var slot:ControlSlot = {name:name, keys:keys, header:header, index:index, inputTypes:inputs};
+    if (spritePath != null) spritePath = "ui/controls/" + spritePath;
+
+    var slot:ControlSlot = {name:name, keys:keys, header:header, index:index, inputTypes:inputs, spritePath:spritePath};
     controlSlots.push(slot);
 
     Save.instance.modOptions.set("customControls", controlSlots);
@@ -109,6 +127,10 @@ class ControlsImpl extends ScriptedModule {
     controlsMenu.controlGrid.clear();
     controlsMenu.labels.clear();
 
+    controlSprites = new FlxTypedGroup();
+    slotToSprIndex = new IntMap();
+    controlsMenu.add(controlSprites);
+
     trace("[CustomControls] Adding extra headers: " + headerSlots);
     trace("[CustomControls] Adding extra keybinds: " + controlSlots);
     buildControls(headers, keyBinds, labels);
@@ -116,14 +138,18 @@ class ControlsImpl extends ScriptedModule {
     controlsMenu.controlGrid.onChange.removeAll();
     controlsMenu.controlGrid.onChange.add(selected -> {
       controlsMenu.camFollow.y = selected.y;
-      controlsMenu.labels.forEach((label) -> label.alpha = 0.6);
+      controlSprites.forEach(label -> label.alpha = 0.6);
+      controlsMenu.labels.forEach(label -> label.alpha = 0.6);
       controlsMenu.labels.members[Std.int(controlsMenu.controlGrid.selectedIndex / 2)].alpha = 1.0;
+
+      if (slotToSprIndex.exists(controlsMenu.controlGrid.selectedIndex))
+        controlSprites.members[slotToSprIndex.get(controlsMenu.controlGrid.selectedIndex)].alpha = 1.0;
     });
 
     controlsMenu.add(prompt);
   }
 
-  // Inserting headers and labels with keybindings
+  // Building headers and labels with keybindings
   function buildControls(ogHeaders:FlxTypedGroup<AtlasText>, keyBinds:Array<InputItem>, labels:Array<AtlasText>) {
     var yPos:Float = controlsMenu.deviceList == null ? 30 : 120;
     var spacer = 70;
@@ -146,7 +172,7 @@ class ControlsImpl extends ScriptedModule {
 
       for (entry in mergedControls) {
         if (entry.isCustom) addCustomControl(entry.slot, entry.slotIndex, yPos);
-        else addOriginalControl(entry.originalLabel, keyBinds, entry.originalIndex, yPos);
+        else addOriginalControl(entry.originalLabel, keyBinds, entry.originalIndex, yPos, headerSlot.name);
 
         yPos += spacer;
       }
@@ -158,12 +184,26 @@ class ControlsImpl extends ScriptedModule {
   function addCustomControl(slot:ControlSlot, arrayIndex:Int, y:Float) {
     var label = controlsMenu.labels.add(new AtlasText(ControlsMenu.CONTROL_BASE_X, y, slot.name, "bold"));
     label.alpha = 0.6;
-    createKeyBinds(slot, arrayIndex, label.x, y);
+    var labelX = label.x;
+
+    if (slot.spritePath != null) addControlSprite(slot.spritePath, label, y);
+
+    createKeyBinds(slot, arrayIndex, labelX, y);
   }
 
-  function addOriginalControl(label:AtlasText, keyBinds:Array<InputItem>, originalIndex:Int, y:Float) {
+  function addOriginalControl(label:AtlasText, keyBinds:Array<InputItem>, originalIndex:Int, y:Float, header:String) {
     label.y = y;
+
     controlsMenu.labels.add(label);
+
+    if (SPRITES.exists(header)) {
+      var headerSprites = SPRITES.get(header);
+      var controlName = label.text.toLowerCase();
+      if (headerSprites.exists(controlName)) {
+        var spritePath = "ui/controls/" + header + "_" + controlName;
+        addControlSprite(spritePath, label, y);
+      }
+    }
 
     var startBindIndex = originalIndex * 2;
     for (column in 0...2) {
@@ -175,6 +215,21 @@ class ControlsImpl extends ScriptedModule {
         controlsMenu.controlGrid.addItem(item.name, item);
       }
     }
+  }
+
+  function addControlSprite(spritePath:String, label:AtlasText, y:Float) {
+    var spr = FunkinSprite.create(30, y + 10, spritePath);
+    spr.setGraphicSize(label.height, label.height);
+    spr.updateHitbox();
+    spr.alpha = 0.6;
+    label.x += spr.width;
+
+    var currentControlIndex = controlsMenu.controlGrid.members.length;
+    var spriteIndex = controlSprites.length;
+    slotToSprIndex.set(currentControlIndex, spriteIndex);
+    slotToSprIndex.set(currentControlIndex + 1, spriteIndex);
+
+    controlSprites.add(spr);
   }
 
   function createKeyBinds(slot:ControlSlot, index:Int, labelX:Float, labelY:Float) {
@@ -219,13 +274,13 @@ class ControlsImpl extends ScriptedModule {
     return result;
   }
 
-  function getOrderedHeaders(headers) {
+  function getOrderedHeaders(headers:FlxTypedGroup<AtlasText>) {
     var result:Array<HeaderSlot> = [];
     var headerMap:StringMap<Bool> = new StringMap();
 
     for (i in 0...headers.length) {
       var header = headers[i];
-      var slot:HeaderSlot = {name: header.text, index: i};
+      var slot:HeaderSlot = {name: header.text, index: i, bold:true};
       result.push(slot);
       headerMap.set(header.text, true);
     }
@@ -318,5 +373,5 @@ class ControlsImpl extends ScriptedModule {
 }
 
 typedef ControlEntry = {pos:Int, isCustom:Bool, originalLabel:Null<AtlasText>, originalIndex:Int, slot:Null<ControlSlot>, slotIndex:Int}
-typedef ControlSlot = {name:String, keys:Array<Int>, header:String, index:Int, inputTypes:Array<Int>}
-typedef HeaderSlot = {name:String, index:Int}
+typedef ControlSlot = {name:String, keys:Array<Int>, header:String, index:Int, inputTypes:Array<Int>, spritePath:String}
+typedef HeaderSlot = {name:String, index:Int, bold:Bool}
