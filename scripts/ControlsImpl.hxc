@@ -370,6 +370,11 @@ class ControlsImpl extends ScriptedModule {
     controlsMenu.controlGrid.enabled = true;
     controlsMenu.canExit = true;
   }
+
+  override public function onDestroy(event:ScriptEvent) {
+    if (controlSprites != null) controlSprites.destroy();
+    controlSprites = null;
+  }
 }
 
 typedef ControlEntry = {pos:Int, isCustom:Bool, originalLabel:Null<AtlasText>, originalIndex:Int, slot:Null<ControlSlot>, slotIndex:Int}

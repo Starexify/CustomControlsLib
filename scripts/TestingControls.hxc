@@ -11,7 +11,7 @@ class TestingControls extends ScriptedModule {
   override public function onStateChangeEnd(event:StateChangeScriptEvent) {
     //ControlsImpl.instance.unregisterKeybind("Dodge");
 
-    ControlsImpl.instance.registerKeybind("Dodge", [32, 0], "NOTES", ["justPressed", "justReleased"], 4, "notes");
+    ControlsImpl.instance.registerKeybind("Dodge", [32, 0], "NOTES", ["justPressed", "justReleased"], 4);
   }
 
   override public function onCreate(event:ScriptEvent) {
