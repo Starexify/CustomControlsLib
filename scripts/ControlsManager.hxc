@@ -167,5 +167,4 @@ class ControlsManager extends ScriptedModule {
   }
 }
 
-typedef ControlSlot = {name:String, keys:Array<Int>, index:Int, inputTypes:Array<Int>}
 typedef InputCallback = {type:Int, callback:Int -> Void}

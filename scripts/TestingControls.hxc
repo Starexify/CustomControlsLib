@@ -14,8 +14,6 @@ class TestingControls extends ScriptedModule {
 
     //ControlsImpl.instance.unregisterHeader("SubHeader");
     ControlsImpl.instance.registerHeader("SubHeader", 1, true, "default");
-    //ControlsImpl.instance.unregisterHeader("t012-?%");
-    ControlsImpl.instance.registerHeader("t012-?%", 2, false, "freeplay-clear");
   }
 
   override public function onCreate(event:ScriptEvent) {
