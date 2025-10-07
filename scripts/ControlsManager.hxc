@@ -143,10 +143,10 @@ class ControlsManager extends ScriptedModule {
   }
 
   public function refreshKeyBinds() {
-    trace("Refreshing key binds...");
+    trace("[CustomControls] Refreshing key binds...");
     controlSlots = Save.instance.modOptions.get("customControls");
     initCustomInputs();
-    trace("Key binds refreshed!");
+    trace("[CustomControls] Key binds refreshed!");
   }
 
   override public function onDestroy(event:ScriptEvent) {

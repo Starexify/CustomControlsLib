@@ -10,8 +10,12 @@ class TestingControls extends ScriptedModule {
 
   override public function onStateChangeEnd(event:StateChangeScriptEvent) {
     //ControlsImpl.instance.unregisterKeybind("Dodge");
+    ControlsImpl.instance.registerKeybind("Dodge", [32, 0], "SubHeader", ["justPressed", "justReleased"], 4);
 
-    ControlsImpl.instance.registerKeybind("Dodge", [32, 0], "NOTES", ["justPressed", "justReleased"], 4);
+    //ControlsImpl.instance.unregisterHeader("SubHeader");
+    ControlsImpl.instance.registerHeader("SubHeader", 1, true, "default");
+    //ControlsImpl.instance.unregisterHeader("t012-?%");
+    ControlsImpl.instance.registerHeader("t012-?%", 2, false, "freeplay-clear");
   }
 
   override public function onCreate(event:ScriptEvent) {

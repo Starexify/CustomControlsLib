@@ -42,34 +42,36 @@ class ControlsImpl extends ScriptedModule {
   }
 
   // API Methods
-  public function registerHeader(name:String, ?index:Int):Int {
+  public function registerHeader(name:String, ?index:Int, ?centered:Bool, ?font:String):Int {
     for (i in 0...headerSlots.length) {
       if (headerSlots[i].name == name) {
-        trace("Cannot register header '" + name + "' a header slot with the same name already exists.");
+        trace("[CustomControls] Cannot register header '" + name + "' a header slot with the same name already exists.");
         return i;
       }
     }
 
-    var slot:HeaderSlot = {name:name, index:index};
-    headerSlots.push(slot);
+    if (centered == null) centered = true;
 
+    var slot:HeaderSlot = {name:name, index:index, centered:centered};
+    if (font != null) slot.font = font;
+
+    headerSlots.push(slot);
 
     Save.instance.modOptions.set("customHeaders", headerSlots);
     Save.instance.flush();
-    trace("Registered header " + name);
+    trace("[CustomControls] Registered header " + name);
     return headerSlots.length - 1;
   }
 
   public function registerKeybind(name:String, keys:Array<Int>, ?header:String, ?inputTypes:Array<String>, ?index:Int, ?spritePath:String):Int {
     for (i in 0...controlSlots.length) {
       if (controlSlots[i].name == name) {
-        trace("Cannot register keybind '" + name + "' a control slot with the same name already exists.");
+        trace("[CustomControls] Cannot register keybind '" + name + "' a control slot with the same name already exists.");
         return i;
       }
     }
-    if (header == null) header = "";
-    if (index == null) index = -1;
 
+    if (index == null) index = -1;
 
     inputTypes = inputTypes ?? ["justPressed", "justReleased"];
     var inputs:Array<Int> = [];
@@ -77,12 +79,13 @@ class ControlsImpl extends ScriptedModule {
 
     if (spritePath != null) spritePath = "ui/controls/" + spritePath;
 
-    var slot:ControlSlot = {name:name, keys:keys, header:header, index:index, inputTypes:inputs, spritePath:spritePath};
+    var slot:ControlSlot = {name:name, keys:keys, index:index, inputTypes:inputs, spritePath:spritePath};
+    if (header != null) slot.header = header;
     controlSlots.push(slot);
 
     Save.instance.modOptions.set("customControls", controlSlots);
     Save.instance.flush();
-    trace("Registered keybind " + name);
+    trace("[CustomControls] Registered keybind " + name);
     return controlSlots.length - 1;
   }
 
@@ -91,7 +94,7 @@ class ControlsImpl extends ScriptedModule {
 
     Save.instance.modOptions.set("customHeaders", headerSlots);
     Save.instance.flush();
-    trace("Unregistered header " + name);
+    trace("[CustomControls] Unregistered header " + name);
     return headerSlots.length - 1;
   }
 
@@ -100,7 +103,7 @@ class ControlsImpl extends ScriptedModule {
 
     Save.instance.modOptions.set("customControls", controlSlots);
     Save.instance.flush();
-    trace("Unregistered keybind " + name);
+    trace("[CustomControls] Unregistered keybind " + name);
     return controlSlots.length - 1;
   }
 
@@ -149,6 +152,13 @@ class ControlsImpl extends ScriptedModule {
     controlsMenu.add(prompt);
   }
 
+  override public function onStateCreate(event:ScriptEvent) {
+    if (FlxG.state is OptionsState) return;
+
+    if (controlSprites != null) controlSprites.destroy();
+    controlSprites = null;
+  }
+
   // Building headers and labels with keybindings
   function buildControls(ogHeaders:FlxTypedGroup<AtlasText>, keyBinds:Array<InputItem>, labels:Array<AtlasText>) {
     var yPos:Float = controlsMenu.deviceList == null ? 30 : 120;
@@ -160,7 +170,8 @@ class ControlsImpl extends ScriptedModule {
     var globalControlIndex = 0;
 
     for (headerSlot in orderedHeaders) {
-      var headerText = new AtlasText(ControlsMenu.CONTROL_BASE_X, yPos, headerSlot.name, "bold").screenCenter(0x01);
+      var headerText = new AtlasText(ControlsMenu.CONTROL_BASE_X, yPos, headerSlot.name, headerSlot.font ?? "bold");
+      if (headerSlot.centered ?? true) headerText.screenCenter(0x01);
       headerText.alpha = 0.9;
       controlsMenu.members[1].add(headerText);
       yPos += headerSpacer;
@@ -280,7 +291,7 @@ class ControlsImpl extends ScriptedModule {
 
     for (i in 0...headers.length) {
       var header = headers[i];
-      var slot:HeaderSlot = {name: header.text, index: i, bold:true};
+      var slot:HeaderSlot = {name: header.text, index: i};
       result.push(slot);
       headerMap.set(header.text, true);
     }
@@ -370,13 +381,8 @@ class ControlsImpl extends ScriptedModule {
     controlsMenu.controlGrid.enabled = true;
     controlsMenu.canExit = true;
   }
-
-  override public function onDestroy(event:ScriptEvent) {
-    if (controlSprites != null) controlSprites.destroy();
-    controlSprites = null;
-  }
 }
 
 typedef ControlEntry = {pos:Int, isCustom:Bool, originalLabel:Null<AtlasText>, originalIndex:Int, slot:Null<ControlSlot>, slotIndex:Int}
 typedef ControlSlot = {name:String, keys:Array<Int>, header:String, index:Int, inputTypes:Array<Int>, spritePath:String}
-typedef HeaderSlot = {name:String, index:Int, bold:Bool}
+typedef HeaderSlot = {name:String, index:Int, centered:Bool, font:String}
