@@ -9,17 +9,20 @@ class TestingControls extends ScriptedModule {
   public static var INPUT_DELAY = 300;
 
   override public function onStateChangeEnd(event:StateChangeScriptEvent) {
+    //ControlsAPI.instance.removeBaseEntry("MENU");
+    ControlsAPI.instance.readdBaseEntry("MENU");
+
     //ControlsImpl.instance.unregisterKeybind("Dodge");
-    ControlsImpl.instance.registerKeybind("Dodge", [32, 0], "SubHeader", ["justPressed", "justReleased"], 4);
+    ControlsAPI.instance.registerKeybind("Dodge", [32, 0], "SubHeader", ["justPressed", "justReleased"], 4);
 
     //ControlsImpl.instance.unregisterHeader("SubHeader");
-    ControlsImpl.instance.registerHeader("SubHeader", 1, true, "default");
+    ControlsAPI.instance.registerHeader("SubHeader", 1, true, "default");
   }
 
   override public function onCreate(event:ScriptEvent) {
-    ControlsImpl.instance.registerHeader("Scroll Speed", 2);
-    ControlsImpl.instance.registerKeybind("Increase Scroll", [53, 0], "Scroll Speed", ["justPressed", "pressed", "justReleased"], 0);
-    ControlsImpl.instance.registerKeybind("Decrease Scroll", [52, 0], "Scroll Speed", ["justPressed", "pressed", "justReleased"], 1);
+    ControlsAPI.instance.registerHeader("Scroll Speed", 2);
+    ControlsAPI.instance.registerKeybind("Increase Scroll", [53, 0], "Scroll Speed", ["justPressed", "pressed", "justReleased"], 0);
+    ControlsAPI.instance.registerKeybind("Decrease Scroll", [52, 0], "Scroll Speed", ["justPressed", "pressed", "justReleased"], 1);
   }
 
   override public function onUpdate(event:UpdateScriptEvent) {

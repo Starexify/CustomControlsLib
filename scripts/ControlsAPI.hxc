@@ -1,8 +1,10 @@
 import flixel.FlxG;
 import flixel.group.FlxTypedGroup;
 import funkin.graphics.FunkinSprite;
+import funkin.input.Controls.Control;
 import funkin.modding.events.ScriptEvent;
 import funkin.modding.module.ScriptedModule;
+import funkin.PlayerSettings;
 import funkin.save.Save;
 import funkin.ui.AtlasText;
 import funkin.ui.ButtonStyle;
@@ -10,18 +12,26 @@ import funkin.ui.options.ControlsMenu;
 import funkin.ui.options.OptionsState;
 import funkin.ui.Prompt;
 import funkin.ui.TextMenuItem;
+import funkin.util.FileUtilSandboxed;
+import funkin.util.FileWriteMode;
 import funkin.util.InputUtil;
+import funkin.util.SerializerUtil;
 import haxe.ds.IntMap;
 import haxe.ds.StringMap;
+import Lambda;
 
-class ControlsImpl extends ScriptedModule {
-  public static var instance:ControlsImpl;
+class ControlsAPI extends ScriptedModule {
+  public static var instance:ControlsAPI;
+
+  public static final COLUMNS = 2;
 
   var controlSlots:Null<Array<ControlSlot>> = Save.instance.modOptions.get("customControls") ?? [];
   var headerSlots:Null<Array<HeaderSlot>> = Save.instance.modOptions.get("customHeaders") ?? [];
-  var controlSprites:FlxTypedGroup<FunkinSprite>;
+  var removedEntries:Null<Array<RemovedEntry>> = [];
+  var removedEntriesData:Null<{entries:Array<RemovedEntry>}>;
 
   public static var SPRITES:StringMap<Dynamic>;
+  var controlSprites:FlxTypedGroup<FunkinSprite>;
 
   var slotToSprIndex:IntMap<Int>;
 
@@ -30,7 +40,7 @@ class ControlsImpl extends ScriptedModule {
 
   function new() {
     super("ControlsImpl");
-    ControlsImpl.instance = this;
+    ControlsAPI.instance = this;
 
     SPRITES = new StringMap();
     SPRITES.set("NOTES", [
@@ -39,6 +49,11 @@ class ControlsImpl extends ScriptedModule {
       "up" => "up",
       "right" => "right"
     ]);
+
+    if (FileUtilSandboxed.fileExists(Assets.getPath("removedControls.json"))) {
+      removedEntriesData = FileUtilSandboxed.readJSONFromPath(Assets.getPath("removedControls.json"));
+      if (removedEntriesData != null && removedEntriesData.entries != null) removedEntries = removedEntriesData.entries;
+    }
   }
 
   // API Methods
@@ -107,6 +122,49 @@ class ControlsImpl extends ScriptedModule {
     return controlSlots.length - 1;
   }
 
+  public function removeBaseEntry(name:String, ?storeKeys:Bool) {
+    for (i in 0...removedEntries.length) {
+      if (removedEntries[i].name == name) {
+        trace("[CustomControls] Already removed base control entry '" + name + "'.");
+        return i;
+      }
+    }
+
+    if (storeKeys == null) storeKeys = true;
+    var entry:RemovedEntry = {name: name};
+    if (storeKeys) {
+      entry.type = "keybind";
+      entry.keys = [];
+    }
+
+    removedEntries.push(entry);
+
+    var data = {entries: removedEntries};
+    FileUtilSandboxed.writeStringToPath(Assets.getPath("removedControls.json"), SerializerUtil.toJSON(data), FileWriteMode.Force);
+
+    trace("[CustomControls] Registered for removal " + name);
+    return removedEntries.length - 1;
+  }
+
+  public function readdBaseEntry(name:String) {
+    var entry = Lambda.find(removedEntries, e -> e.name == name);
+    if (entry == null) {
+      trace("[CustomControls] No removed entry found for '" + name + "'.");
+      return;
+    }
+
+    trace(entry.control);
+    PlayerSettings.player1.controls.bindKeys(entry.control, entry.keys);
+    PlayerSettings.player1.saveControls();
+
+    removedEntries.remove(entry);
+
+    var data = {entries: removedEntries};
+    FileUtilSandboxed.writeStringToPath(Assets.getPath("removedControls.json"), SerializerUtil.toJSON(data), FileWriteMode.Force);
+
+    trace("[CustomControls] Re-added base entry '" + name + "'.");
+  }
+
   // Controls Menu Replacement
   override function onStateChangeEnd(event:StateChangeScriptEvent) {
     if (!(event.targetState is OptionsState)) return;
@@ -136,6 +194,7 @@ class ControlsImpl extends ScriptedModule {
 
     trace("[CustomControls] Adding extra headers: " + headerSlots);
     trace("[CustomControls] Adding extra keybinds: " + controlSlots);
+    trace("[CustomControls] Removing entries: " + removedEntries);
     buildControls(headers, keyBinds, labels);
 
     controlsMenu.controlGrid.onChange.removeAll();
@@ -203,8 +262,30 @@ class ControlsImpl extends ScriptedModule {
   }
 
   function addOriginalControl(label:AtlasText, keyBinds:Array<InputItem>, originalIndex:Int, y:Float, header:String) {
-    label.y = y;
+    var removedEntry = Lambda.find(removedEntries, e -> e.name == label.text);
+    if (removedEntry != null && removedEntry.type == "keybind") {
+      if (removedEntry.keys.length == 0) {
+        var startBindIndex = originalIndex * 2;
+        for (column in 0...COLUMNS) {
+          var bindIndex = startBindIndex + column;
+          if (bindIndex < keyBinds.length) {
+            var item = keyBinds[bindIndex];
+            removedEntry.keys = PlayerSettings.player1.controls.getInputsFor(item.control, item.device);
+            removedEntry.control = item.control;
 
+            PlayerSettings.player1.controls.unbindKeys(item.control, removedEntry.keys);
+            PlayerSettings.player1.saveControls();
+          }
+        }
+
+        var data = {entries: removedEntries};
+        FileUtilSandboxed.writeStringToPath(Assets.getPath("removedControls.json"), SerializerUtil.toJSON(data), FileWriteMode.Force);
+        trace("[CustomControls] Stored keys for removed entry: " + label.text + " = " + removedEntry.keys);
+      }
+      return;
+    }
+
+    label.y = y;
     controlsMenu.labels.add(label);
 
     if (SPRITES.exists(header)) {
@@ -217,7 +298,7 @@ class ControlsImpl extends ScriptedModule {
     }
 
     var startBindIndex = originalIndex * 2;
-    for (column in 0...2) {
+    for (column in 0...COLUMNS) {
       var bindIndex = startBindIndex + column;
       if (bindIndex < keyBinds.length) {
         var item = keyBinds[bindIndex];
@@ -248,7 +329,7 @@ class ControlsImpl extends ScriptedModule {
     for (k in 0...controlsArray.length) if (slot.keys[k] == 0) controlsArray[k] = "---";
 
     var persIndex = index;
-    for (column in 0...2) {
+    for (column in 0...COLUMNS) {
       var item:TextMenuItem = new TextMenuItem(labelX + ControlsMenu.CONTROL_MARGIN_X + column * ControlsMenu.CONTROL_SPACING_X, labelY, controlsArray[column], "default",
       () -> selectBind(controlsMenu, persIndex, column));
       item.fireInstantly = true;
@@ -290,7 +371,11 @@ class ControlsImpl extends ScriptedModule {
     var headerMap:StringMap<Bool> = new StringMap();
 
     for (i in 0...headers.length) {
-      var header = headers[i];
+      var header:AtlasText = headers[i];
+
+      // Skip if this header is marked for removal
+      if (Lambda.exists(removedEntries, e -> e.name == header.text)) continue;
+
       var slot:HeaderSlot = {name: header.text, index: i};
       result.push(slot);
       headerMap.set(header.text, true);
@@ -314,6 +399,9 @@ class ControlsImpl extends ScriptedModule {
     var map:StringMap<Array<{label:AtlasText, index:Int}>> = new StringMap();
     for (i in 0...labels.length) {
       var label = labels[i];
+
+      //if (Lambda.exists(removedEntries, e -> e.name == label.text)) continue;
+
       var headerName = getHeaderForLabel(label, headers);
       if (!map.exists(headerName)) map.set(headerName, []);
       map.get(headerName).push({label: label, index: i});
@@ -383,6 +471,7 @@ class ControlsImpl extends ScriptedModule {
   }
 }
 
+typedef RemovedEntry = {name:String, type:String, control:Control, keys:Array<Int>}
 typedef ControlEntry = {pos:Int, isCustom:Bool, originalLabel:Null<AtlasText>, originalIndex:Int, slot:Null<ControlSlot>, slotIndex:Int}
 typedef ControlSlot = {name:String, keys:Array<Int>, header:String, index:Int, inputTypes:Array<Int>, spritePath:String}
 typedef HeaderSlot = {name:String, index:Int, centered:Bool, font:String}

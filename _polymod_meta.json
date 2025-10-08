@@ -1,6 +1,6 @@
 {
   "title": "Custom Controls API",
-  "description": "An API that makes adding keybinds in V-Slice easier.",
+  "description": "An API that makes adding and modifying controls in V-Slice easier.",
   "contributors": [
     {
       "name": "ImVeryBad",
