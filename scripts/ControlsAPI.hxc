@@ -1,7 +1,8 @@
 import flixel.FlxG;
 import flixel.group.FlxTypedGroup;
 import funkin.graphics.FunkinSprite;
-import funkin.input.Controls.Control;
+import funkin.input.Control;
+import funkin.input.Device;
 import funkin.modding.events.ScriptEvent;
 import funkin.modding.module.ScriptedModule;
 import funkin.PlayerSettings;
@@ -122,7 +123,7 @@ class ControlsAPI extends ScriptedModule {
     return controlSlots.length - 1;
   }
 
-  public function removeBaseEntry(name:String, ?storeKeys:Bool) {
+  public function removeBaseEntry(name:String, control:Control, ?storeKeys:Bool, ?device:Device) {
     for (i in 0...removedEntries.length) {
       if (removedEntries[i].name == name) {
         trace("[CustomControls] Already removed base control entry '" + name + "'.");
@@ -133,9 +134,12 @@ class ControlsAPI extends ScriptedModule {
     if (storeKeys == null) storeKeys = true;
     var entry:RemovedEntry = {name: name};
     if (storeKeys) {
+      entry.keys = PlayerSettings.player1.controls.getInputsFor(control, device ?? Device.Keys);
       entry.type = "keybind";
-      entry.keys = [];
     }
+
+    PlayerSettings.player1.controls.unbindKeys(control, entry.keys);
+    PlayerSettings.player1.saveControls();
 
     removedEntries.push(entry);
 
@@ -146,15 +150,14 @@ class ControlsAPI extends ScriptedModule {
     return removedEntries.length - 1;
   }
 
-  public function readdBaseEntry(name:String) {
+  public function readdBaseEntry(name:String, control:Control) {
     var entry = Lambda.find(removedEntries, e -> e.name == name);
     if (entry == null) {
       trace("[CustomControls] No removed entry found for '" + name + "'.");
       return;
     }
 
-    trace(entry.control);
-    PlayerSettings.player1.controls.bindKeys(entry.control, entry.keys);
+    PlayerSettings.player1.controls.bindKeys(control, entry.keys);
     PlayerSettings.player1.saveControls();
 
     removedEntries.remove(entry);
@@ -262,29 +265,6 @@ class ControlsAPI extends ScriptedModule {
   }
 
   function addOriginalControl(label:AtlasText, keyBinds:Array<InputItem>, originalIndex:Int, y:Float, header:String) {
-    var removedEntry = Lambda.find(removedEntries, e -> e.name == label.text);
-    if (removedEntry != null && removedEntry.type == "keybind") {
-      if (removedEntry.keys.length == 0) {
-        var startBindIndex = originalIndex * 2;
-        for (column in 0...COLUMNS) {
-          var bindIndex = startBindIndex + column;
-          if (bindIndex < keyBinds.length) {
-            var item = keyBinds[bindIndex];
-            removedEntry.keys = PlayerSettings.player1.controls.getInputsFor(item.control, item.device);
-            removedEntry.control = item.control;
-
-            PlayerSettings.player1.controls.unbindKeys(item.control, removedEntry.keys);
-            PlayerSettings.player1.saveControls();
-          }
-        }
-
-        var data = {entries: removedEntries};
-        FileUtilSandboxed.writeStringToPath(Assets.getPath("removedControls.json"), SerializerUtil.toJSON(data), FileWriteMode.Force);
-        trace("[CustomControls] Stored keys for removed entry: " + label.text + " = " + removedEntry.keys);
-      }
-      return;
-    }
-
     label.y = y;
     controlsMenu.labels.add(label);
 
@@ -400,7 +380,7 @@ class ControlsAPI extends ScriptedModule {
     for (i in 0...labels.length) {
       var label = labels[i];
 
-      //if (Lambda.exists(removedEntries, e -> e.name == label.text)) continue;
+      if (Lambda.exists(removedEntries, e -> e.name == label.text)) continue;
 
       var headerName = getHeaderForLabel(label, headers);
       if (!map.exists(headerName)) map.set(headerName, []);
@@ -471,7 +451,7 @@ class ControlsAPI extends ScriptedModule {
   }
 }
 
-typedef RemovedEntry = {name:String, type:String, control:Control, keys:Array<Int>}
+typedef RemovedEntry = {name:String, type:String, keys:Array<Int>}
 typedef ControlEntry = {pos:Int, isCustom:Bool, originalLabel:Null<AtlasText>, originalIndex:Int, slot:Null<ControlSlot>, slotIndex:Int}
 typedef ControlSlot = {name:String, keys:Array<Int>, header:String, index:Int, inputTypes:Array<Int>, spritePath:String}
 typedef HeaderSlot = {name:String, index:Int, centered:Bool, font:String}
