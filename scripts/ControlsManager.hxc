@@ -5,14 +5,11 @@ import funkin.modding.module.ScriptedModule;
 import funkin.save.Save;
 import haxe.ds.ObjectMap;
 import haxe.ds.StringMap;
-import Lambda;
 
 class ControlsManager extends ScriptedModule {
   public static var instance:ControlsManager;
 
   var controlSlots:Null<Array<ControlSlot>> = Save.instance.modOptions.get("customControls");
-
-  var customKeyMap:ObjectMap<Int, Int> = new ObjectMap();
 
   var inputPressQueue:Array<PreciseInputEvent> = [];
   var inputReleaseQueue:Array<PreciseInputEvent> = [];
@@ -28,11 +25,11 @@ class ControlsManager extends ScriptedModule {
     initCustomInputs();
   }
 
-  var callbacks:StringMap<Array<InputCallback>> = new StringMap();
+  public var callbacks:StringMap<Array<InputCallback>> = new StringMap();
 
-  public function registerCallback(controlName:String, inputType:Int, callback:Int -> Void) {
-    if (!callbacks.exists(controlName)) callbacks.set(controlName, []);
-    callbacks.get(controlName).push({type: inputType, callback: callback});
+  public static function registerCallback(controlName:String, inputType:Int, callback:Int -> Void) {
+    if (!ControlsManager.instance.callbacks.exists(controlName)) ControlsManager.instance.callbacks.set(controlName, []);
+    ControlsManager.instance.callbacks.get(controlName).push({type: inputType, callback: callback});
     trace("Registered callback for " + controlName + " on input type " + inputType);
   }
 
@@ -45,7 +42,6 @@ class ControlsManager extends ScriptedModule {
   function initCustomInputs() {
     cleanup();
 
-    customKeyMap.clear();
     inputPressQueue = [];
     inputReleaseQueue = [];
     justPressedActions.clear();
@@ -94,7 +90,7 @@ class ControlsManager extends ScriptedModule {
 
   function onKeyPress(key:Int) {
     for (slot in controlSlots) {
-      if (Lambda.has(slot.keys, key)) {
+      if (slot.keys.contains(key)) {
         executeCallbacks(slot.name, InputsUtil.JUST_PRESSED, key);
         break;
       }
@@ -104,7 +100,7 @@ class ControlsManager extends ScriptedModule {
 
   function onKeyRelease(key:Int) {
     for (slot in controlSlots) {
-      if (Lambda.has(slot.keys, key)) {
+      if (slot.keys.contains(key)) {
         executeCallbacks(slot.name, InputsUtil.JUST_RELEASED, key);
         break;
       }
@@ -114,7 +110,7 @@ class ControlsManager extends ScriptedModule {
 
   function onKeyHold(key:Int) {
     for (slot in controlSlots) {
-      if (Lambda.has(slot.keys, key)) {
+      if (slot.keys.contains(key)) {
         executeCallbacks(slot.name, InputsUtil.PRESSED, key);
         break;
       }
@@ -124,7 +120,7 @@ class ControlsManager extends ScriptedModule {
 
   function onKeyReleased(key:Int) {
     for (slot in controlSlots) {
-      if (Lambda.has(slot.keys, key)) {
+      if (slot.keys.contains(key)) {
         executeCallbacks(slot.name, InputsUtil.RELEASED, key);
         break;
       }
@@ -164,6 +160,8 @@ class ControlsManager extends ScriptedModule {
       for (action in justReleasedActions) if (action != null) action.destroy();
       justReleasedActions.clear();
     }
+
+    if (callbacks != null) callbacks.clear();
   }
 }
 
