@@ -20,8 +20,11 @@ class ControlsManager extends ScriptedModule {
   var justReleasedActions:ObjectMap<Int, FlxActionDigital> = new ObjectMap();
 
   function new() {
-    super("ControlsManager");
+    super("ControlsManager", Math.NEGATIVE_INFINITY);
     ControlsManager.instance = this;
+  }
+
+  override public function onCreate(event:ScriptEvent) {
     initCustomInputs();
   }
 
@@ -30,7 +33,7 @@ class ControlsManager extends ScriptedModule {
   public static function registerCallback(controlName:String, inputType:Int, callback:Int -> Void) {
     if (!ControlsManager.instance.callbacks.exists(controlName)) ControlsManager.instance.callbacks.set(controlName, []);
     ControlsManager.instance.callbacks.get(controlName).push({type: inputType, callback: callback});
-    trace("Registered callback for " + controlName + " on input type " + inputType);
+    trace("[CCAPI] Registered callback for " + controlName + " on input type " + inputType);
   }
 
   function executeCallbacks(controlName:String, inputType:Int, key:Int) {
@@ -55,7 +58,7 @@ class ControlsManager extends ScriptedModule {
       var keyName = slot.name;
       var types = slot.inputTypes != null ? slot.inputTypes : [InputsUtil.JUST_RELEASED, InputsUtil.JUST_PRESSED];
 
-      trace("[CustomControls] Setting up " + keyName + " with types: " + types);
+      trace("[CCAPI] Setting up " + keyName + " with types: " + types);
 
       for (type in types) {
         switch (type) {
@@ -139,10 +142,10 @@ class ControlsManager extends ScriptedModule {
   }
 
   public function refreshKeyBinds() {
-    trace("[CustomControls] Refreshing key binds...");
+    trace("[CCAPI] Refreshing key binds...");
     controlSlots = Save.instance.modOptions.get("customControls");
     initCustomInputs();
-    trace("[CustomControls] Key binds refreshed!");
+    trace("[CCAPI] Key binds refreshed!");
   }
 
   override public function onDestroy(event:ScriptEvent) {
@@ -161,7 +164,7 @@ class ControlsManager extends ScriptedModule {
       justReleasedActions.clear();
     }
 
-    if (callbacks != null) callbacks.clear();
+    //if (callbacks != null) callbacks.clear();
   }
 }
 
