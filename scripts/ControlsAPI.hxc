@@ -39,10 +39,12 @@ class ControlsAPI extends ScriptedModule {
   var controlsMenu:ControlsMenu;
   var prompt:Prompt;
 
-  function new() {
-    super("ControlsImpl");
+  public function new() {
+    super("ControlsAPI", Math.POSITIVE_INFINITY);
     ControlsAPI.instance = this;
+  }
 
+  override public function onCreate(event:ScriptEvent) {
     SPRITES = new StringMap();
     SPRITES.set("NOTES", [
       "left" => "left",
@@ -61,7 +63,7 @@ class ControlsAPI extends ScriptedModule {
   public function registerHeader(name:String, ?index:Int, ?centered:Bool, ?font:String):Int {
     for (i in 0...headerSlots.length) {
       if (headerSlots[i].name == name) {
-        trace("[CustomControls] Cannot register header '" + name + "' a header slot with the same name already exists.");
+        trace("[CCAPI] Cannot register header '" + name + "' a header slot with the same name already exists.");
         return i;
       }
     }
@@ -75,14 +77,14 @@ class ControlsAPI extends ScriptedModule {
 
     Save.instance.modOptions.set("customHeaders", headerSlots);
     Save.instance.flush();
-    trace("[CustomControls] Registered header " + name);
+    trace("[CCAPI] Registered header " + name);
     return headerSlots.length - 1;
   }
 
   public function registerKeybind(name:String, keys:Array<Int>, ?header:String, ?inputTypes:Array<String>, ?index:Int, ?spritePath:String):Int {
     for (i in 0...controlSlots.length) {
       if (controlSlots[i].name == name) {
-        trace("[CustomControls] Cannot register keybind '" + name + "' a control slot with the same name already exists.");
+        trace("[CCAPI] Cannot register keybind '" + name + "' a control slot with the same name already exists.");
         return i;
       }
     }
@@ -101,7 +103,7 @@ class ControlsAPI extends ScriptedModule {
 
     Save.instance.modOptions.set("customControls", controlSlots);
     Save.instance.flush();
-    trace("[CustomControls] Registered keybind " + name);
+    trace("[CCAPI] Registered keybind " + name);
     return controlSlots.length - 1;
   }
 
@@ -110,7 +112,7 @@ class ControlsAPI extends ScriptedModule {
 
     Save.instance.modOptions.set("customHeaders", headerSlots);
     Save.instance.flush();
-    trace("[CustomControls] Unregistered header " + name);
+    trace("[CCAPI] Unregistered header " + name);
     return headerSlots.length - 1;
   }
 
@@ -119,14 +121,14 @@ class ControlsAPI extends ScriptedModule {
 
     Save.instance.modOptions.set("customControls", controlSlots);
     Save.instance.flush();
-    trace("[CustomControls] Unregistered keybind " + name);
+    trace("[CCAPI] Unregistered keybind " + name);
     return controlSlots.length - 1;
   }
 
   public function removeBaseEntry(name:String, control:Control, ?storeKeys:Bool, ?device:Device) {
     for (i in 0...removedEntries.length) {
       if (removedEntries[i].name == name) {
-        trace("[CustomControls] Already removed base control entry '" + name + "'.");
+        trace("[CCAPI] Already removed base control entry '" + name + "'.");
         return i;
       }
     }
@@ -146,14 +148,14 @@ class ControlsAPI extends ScriptedModule {
     var data = {entries: removedEntries};
     FileUtilSandboxed.writeStringToPath(Assets.getPath("removedControls.json"), SerializerUtil.toJSON(data), FileWriteMode.Force);
 
-    trace("[CustomControls] Registered for removal " + name);
+    trace("[CCAPI] Registered for removal " + name);
     return removedEntries.length - 1;
   }
 
   public function readdBaseEntry(name:String, control:Control) {
     var entry = Lambda.find(removedEntries, e -> e.name == name);
     if (entry == null) {
-      trace("[CustomControls] No removed entry found for '" + name + "'.");
+      trace("[CCAPI] No removed entry found for '" + name + "'.");
       return;
     }
 
@@ -165,11 +167,11 @@ class ControlsAPI extends ScriptedModule {
     var data = {entries: removedEntries};
     FileUtilSandboxed.writeStringToPath(Assets.getPath("removedControls.json"), SerializerUtil.toJSON(data), FileWriteMode.Force);
 
-    trace("[CustomControls] Re-added base entry '" + name + "'.");
+    trace("[CCAPI] Re-added base entry '" + name + "'.");
   }
 
   // Controls Menu Replacement
-  override function onStateChangeEnd(event:StateChangeScriptEvent) {
+  override public function onStateChangeEnd(event:StateChangeScriptEvent) {
     if (!(event.targetState is OptionsState)) return;
 
     controlsMenu = event.targetState.optionsCodex.pages.get("controls");
@@ -195,9 +197,9 @@ class ControlsAPI extends ScriptedModule {
     slotToSprIndex = new IntMap();
     controlsMenu.add(controlSprites);
 
-    trace("[CustomControls] Adding extra headers: " + headerSlots);
-    trace("[CustomControls] Adding extra keybinds: " + controlSlots);
-    trace("[CustomControls] Removing entries: " + removedEntries);
+    trace("[CCAPI] Adding extra headers: " + headerSlots);
+    trace("[CCAPI] Adding extra keybinds: " + controlSlots);
+    trace("[CCAPI] Removing entries: " + removedEntries);
     buildControls(headers, keyBinds, labels);
 
     controlsMenu.controlGrid.onChange.removeAll();
@@ -408,7 +410,7 @@ class ControlsAPI extends ScriptedModule {
   var selKey = -1;
   var keyUsedToEnterPrompt:Int;
 
-  override function onUpdate(event:UpdateScriptEvent) {
+  override public function onUpdate(event:UpdateScriptEvent) {
     if (controlsMenu == null || !prompt.exists) return;
 
     var key:Int = FlxG.keys.firstJustReleased();

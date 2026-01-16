@@ -1,0 +1,11 @@
+import funkin.modding.module.ScriptedModule;
+import funkin.modding.events.ScriptEvent;
+
+class Test extends ScriptedModule {
+  override public function onCreate(event:ScriptEvent) {
+    ControlsAPI.instance.registerKeybind("Dodge", [32, 0], "NOTES", ["justPressed", "justReleased"]);
+    ControlsManager.registerCallback("Dodge", InputsUtil.JUST_PRESSED, key -> {
+      trace("Just pressed key: " + key);
+    });
+  }
+}
